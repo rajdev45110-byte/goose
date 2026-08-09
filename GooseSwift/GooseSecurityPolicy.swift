@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import OSLog
 
@@ -244,12 +245,92 @@ enum GooseFileProtection {
         continue
       }
       let destination = destinationDirectory.appendingPathComponent(name)
-      if fileManager.fileExists(atPath: destination.path) {
+
+      if !fileManager.fileExists(atPath: destination.path) {
+        move(source, to: destination)
+        continue
+      }
+
+      // A destination already exists. Only discard the legacy copy when it is
+      // proven byte-identical to what is already there. Otherwise preserve it
+      // under a non-colliding name inside Application Support, which is not
+      // reachable through Files or iTunes document sharing.
+      if filesAreIdentical(source, destination) {
         try? fileManager.removeItem(at: source)
-      } else {
-        try? fileManager.moveItem(at: source, to: destination)
-        apply(backgroundWritable, to: destination, artifact: .legacyDiagnostic)
+        continue
+      }
+      guard let preserved = preservedDestinationURL(for: name, in: destinationDirectory) else {
+        logger.error("legacy diagnostic left in place: no free preservation name")
+        continue
+      }
+      move(source, to: preserved)
+    }
+  }
+
+  private static func move(_ source: URL, to destination: URL) {
+    do {
+      try FileManager.default.moveItem(at: source, to: destination)
+      apply(backgroundWritable, to: destination, artifact: .legacyDiagnostic)
+    } catch {
+      let nsError = error as NSError
+      logger.error(
+        "legacy diagnostic move failed, source left in place: domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)"
+      )
+    }
+  }
+
+  /// A free `<base>.legacy[-n].<ext>` name in `directory`, or nil if none is
+  /// available within a small bound.
+  private static func preservedDestinationURL(for name: String, in directory: URL) -> URL? {
+    let base = (name as NSString).deletingPathExtension
+    let ext = (name as NSString).pathExtension
+    for index in 0..<32 {
+      let marker = index == 0 ? "legacy" : "legacy-\(index)"
+      let candidate = ext.isEmpty ? "\(base).\(marker)" : "\(base).\(marker).\(ext)"
+      let url = directory.appendingPathComponent(candidate)
+      if !FileManager.default.fileExists(atPath: url.path) {
+        return url
       }
     }
+    return nil
+  }
+
+  /// Byte equivalence, size-gated then SHA-256. Any uncertainty (unreadable
+  /// file, read error, missing attributes) returns false so the caller
+  /// preserves rather than deletes.
+  private static func filesAreIdentical(_ lhs: URL, _ rhs: URL) -> Bool {
+    let fileManager = FileManager.default
+    guard let lhsSize = (try? fileManager.attributesOfItem(atPath: lhs.path))?[.size] as? NSNumber,
+          let rhsSize = (try? fileManager.attributesOfItem(atPath: rhs.path))?[.size] as? NSNumber,
+          lhsSize.uint64Value == rhsSize.uint64Value else {
+      return false
+    }
+    guard let lhsDigest = sha256(of: lhs), let rhsDigest = sha256(of: rhs) else {
+      return false
+    }
+    return lhsDigest == rhsDigest
+  }
+
+  private static func sha256(of url: URL) -> SHA256Digest? {
+    guard let handle = try? FileHandle(forReadingFrom: url) else {
+      return nil
+    }
+    defer {
+      try? handle.close()
+    }
+    var hasher = SHA256()
+    while true {
+      let chunk: Data?
+      do {
+        chunk = try handle.read(upToCount: 256 * 1024)
+      } catch {
+        return nil
+      }
+      guard let chunk, !chunk.isEmpty else {
+        break
+      }
+      hasher.update(data: chunk)
+    }
+    return hasher.finalize()
   }
 }

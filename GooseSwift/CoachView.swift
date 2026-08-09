@@ -34,7 +34,7 @@ struct CoachView: View {
       NavigationStack {
         chatSheetContent
           .gooseScreenBackground()
-          .navigationTitle(chat.isSignedIn ? "Coach Chat" : "Coach Sign In")
+          .navigationTitle(sheetTitle)
           .navigationBarTitleDisplayMode(.inline)
           .toolbarBackground(.hidden, for: .navigationBar)
           .toolbar {
@@ -57,6 +57,8 @@ struct CoachView: View {
       healthStore.refreshPacketInputsIfNeeded()
       if GooseCoachPolicy.remoteExecutionEnabled {
         chat.refreshAuth()
+      } else {
+        chat.refreshStoredCredentialPresence()
       }
       applyRequestedCoachPromptIfNeeded()
     }
@@ -74,7 +76,7 @@ struct CoachView: View {
 
   @ViewBuilder
   private var chatSheetContent: some View {
-    if chat.isSignedIn {
+    if chat.isSignedIn || !GooseCoachPolicy.remoteExecutionEnabled {
       CoachChatScreen(
         chat: chat,
         healthStore: healthStore,
@@ -92,7 +94,17 @@ struct CoachView: View {
     }
   }
 
+  private var sheetTitle: String {
+    if !GooseCoachPolicy.remoteExecutionEnabled {
+      return "Coach History"
+    }
+    return chat.isSignedIn ? "Coach Chat" : "Coach Sign In"
+  }
+
   private var chatStatus: String {
+    guard GooseCoachPolicy.remoteExecutionEnabled else {
+      return "Disabled for privacy"
+    }
     if chat.isSignedIn {
       return chat.streamState.isStreaming ? "Streaming" : "Signed in"
     }

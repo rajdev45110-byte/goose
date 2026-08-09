@@ -37,7 +37,12 @@ struct CoachChatScreen: View {
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 12) {
           if !GooseCoachPolicy.remoteExecutionEnabled {
-            CoachRemoteDisabledNotice()
+            CoachRemoteDisabledNotice(
+              hasHistory: !chat.messages.isEmpty,
+              hasStoredCredentials: chat.hasStoredCredentials,
+              clearHistory: chat.clearLocalConversation,
+              forgetCredentials: chat.forgetStoredCredentials
+            )
           }
 
           if chat.streamState != .idle {
@@ -140,6 +145,13 @@ struct CoachChatScreen: View {
 }
 
 private struct CoachRemoteDisabledNotice: View {
+  let hasHistory: Bool
+  let hasStoredCredentials: Bool
+  let clearHistory: () -> Void
+  let forgetCredentials: () -> Void
+  @State private var confirmingClear = false
+  @State private var confirmingForget = false
+
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       Label(GooseCoachPolicy.disabledTitle, systemImage: "lock.shield")
@@ -149,6 +161,41 @@ private struct CoachRemoteDisabledNotice: View {
         .font(.footnote)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
+
+      if hasHistory || hasStoredCredentials {
+        Divider()
+          .padding(.vertical, 2)
+      }
+
+      if hasHistory {
+        Text("Past Coach messages are still stored on this device.")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+        Button(role: .destructive) {
+          confirmingClear = true
+        } label: {
+          Label("Clear Chat History", systemImage: "trash")
+            .font(.footnote.weight(.semibold))
+        }
+        .buttonStyle(.bordered)
+        .accessibilityHint("Deletes the locally stored Coach conversation")
+      }
+
+      if hasStoredCredentials {
+        Text("A Coach sign-in credential is still stored in the Keychain. It is never used while online Coach is disabled.")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+        Button(role: .destructive) {
+          confirmingForget = true
+        } label: {
+          Label("Forget Coach Credentials", systemImage: "key.slash")
+            .font(.footnote.weight(.semibold))
+        }
+        .buttonStyle(.bordered)
+        .accessibilityHint("Deletes the stored Coach sign-in credential from the Keychain")
+      }
     }
     .padding(12)
     .frame(maxWidth: .infinity, alignment: .leading)
@@ -156,6 +203,26 @@ private struct CoachRemoteDisabledNotice: View {
     .overlay {
       RoundedRectangle(cornerRadius: 8, style: .continuous)
         .stroke(Color.orange.opacity(0.30), lineWidth: 1)
+    }
+    .confirmationDialog(
+      "Clear Coach chat history?",
+      isPresented: $confirmingClear,
+      titleVisibility: .visible
+    ) {
+      Button("Clear History", role: .destructive, action: clearHistory)
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text("This deletes the locally stored Coach conversation on this device. It cannot be undone.")
+    }
+    .confirmationDialog(
+      "Forget Coach credentials?",
+      isPresented: $confirmingForget,
+      titleVisibility: .visible
+    ) {
+      Button("Forget Credentials", role: .destructive, action: forgetCredentials)
+      Button("Cancel", role: .cancel) {}
+    } message: {
+      Text("This deletes the stored Coach sign-in from this device's Keychain. No network request is made.")
     }
   }
 }
