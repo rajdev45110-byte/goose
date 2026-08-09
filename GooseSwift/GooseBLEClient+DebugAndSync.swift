@@ -135,13 +135,6 @@ extension GooseBLEClient {
 
   func debugCommandSnapshotURLs() -> [URL] {
     var urls: [URL] = []
-    if let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-      urls.append(
-        documentsURL
-          .appendingPathComponent("GooseSwift", isDirectory: true)
-          .appendingPathComponent("debug-bt-commands.json")
-      )
-    }
     if let supportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
       urls.append(
         supportURL

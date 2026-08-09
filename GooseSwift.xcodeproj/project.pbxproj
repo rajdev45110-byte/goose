@@ -130,6 +130,7 @@
 			A1000000000000000000002C /* CoachChatTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000002C /* CoachChatTypes.swift */; };
 			A1000000000000000000002D /* OpenAICoachResponsesClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000000000000000000002D /* OpenAICoachResponsesClient.swift */; };
 			A10000000000000000000040 /* CoachLocalToolContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000040 /* CoachLocalToolContext.swift */; };
+			A10000000000000000000041 /* GooseSecurityPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000041 /* GooseSecurityPolicy.swift */; };
 				B10000000000000000000001 /* WorkoutLiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* WorkoutLiveActivityAttributes.swift */; };
 			B10000000000000000000002 /* WorkoutLiveActivityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000002 /* WorkoutLiveActivityController.swift */; };
 			B10000000000000000000003 /* GooseWorkoutLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* GooseWorkoutLiveActivityWidget.swift */; };
@@ -277,6 +278,7 @@
 			A2000000000000000000002C /* CoachChatTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachChatTypes.swift; sourceTree = "<group>"; };
 			A2000000000000000000002D /* OpenAICoachResponsesClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAICoachResponsesClient.swift; sourceTree = "<group>"; };
 			A20000000000000000000040 /* CoachLocalToolContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachLocalToolContext.swift; sourceTree = "<group>"; };
+			A20000000000000000000041 /* GooseSecurityPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooseSecurityPolicy.swift; sourceTree = "<group>"; };
 				B20000000000000000000001 /* WorkoutLiveActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLiveActivityAttributes.swift; sourceTree = "<group>"; };
 			B20000000000000000000002 /* WorkoutLiveActivityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutLiveActivityController.swift; sourceTree = "<group>"; };
 			B20000000000000000000003 /* GooseWorkoutLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GooseWorkoutLiveActivityWidget.swift; sourceTree = "<group>"; };
@@ -470,6 +472,7 @@
 					A20000000000000000000026 /* OpenAICoachChat.swift */,
 					A2000000000000000000002D /* OpenAICoachResponsesClient.swift */,
 					A20000000000000000000040 /* CoachLocalToolContext.swift */,
+					A20000000000000000000041 /* GooseSecurityPolicy.swift */,
 					A20000000000000000000027 /* CoachTips.swift */,
 					B20000000000000000000001 /* WorkoutLiveActivityAttributes.swift */,
 					B20000000000000000000002 /* WorkoutLiveActivityController.swift */,
@@ -774,6 +777,7 @@
 					A10000000000000000000026 /* OpenAICoachChat.swift in Sources */,
 					A1000000000000000000002D /* OpenAICoachResponsesClient.swift in Sources */,
 					A10000000000000000000040 /* CoachLocalToolContext.swift in Sources */,
+					A10000000000000000000041 /* GooseSecurityPolicy.swift in Sources */,
 					A10000000000000000000027 /* CoachTips.swift in Sources */,
 						A10000000000000000000023 /* GooseTheme.swift in Sources */,
 						B10000000000000000000001 /* WorkoutLiveActivityAttributes.swift in Sources */,

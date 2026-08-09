@@ -33,6 +33,13 @@ final class OpenAICoachChatModel: ObservableObject {
   }
 
   func refreshAuth() {
+    guard GooseCoachPolicy.remoteExecutionEnabled else {
+      auth = nil
+      isSignedIn = false
+      deviceCode = nil
+      loginStatus = GooseCoachPolicy.disabledTitle
+      return
+    }
     Task { [weak self, authClient] in
       do {
         if let storedAuth = try await authClient.storedAuth(refreshIfNeeded: true) {
@@ -73,6 +80,11 @@ final class OpenAICoachChatModel: ObservableObject {
   }
 
   func startOAuthSignIn() {
+    guard GooseCoachPolicy.remoteExecutionEnabled else {
+      loginStatus = GooseCoachPolicy.disabledTitle
+      errorMessage = GooseCoachPolicy.disabledSummary
+      return
+    }
     loginTask?.cancel()
     loginStatus = "Requesting OAuth code"
     deviceCode = nil
@@ -137,6 +149,11 @@ final class OpenAICoachChatModel: ObservableObject {
   ) {
     let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedPrompt.isEmpty, !streamState.isStreaming else {
+      return
+    }
+    guard GooseCoachPolicy.remoteExecutionEnabled else {
+      errorMessage = GooseCoachPolicy.disabledSummary
+      streamState = .idle
       return
     }
     guard let auth else {

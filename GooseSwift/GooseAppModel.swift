@@ -264,7 +264,7 @@ final class GooseAppModel: ObservableObject {
     guard enabled else {
       return nil
     }
-    guard let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
+    guard let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
       return nil
     }
     let gooseDirectory = directory.appendingPathComponent("GooseSwift", isDirectory: true)

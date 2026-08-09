@@ -29,11 +29,14 @@ extension MoreDataStore {
     let sidecarURL = sidecarDirectory.appendingPathComponent("local-health-validation-manifest.json")
     let data = try JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys])
     try data.write(to: sidecarURL, options: .atomic)
+    GooseFileProtection.apply(GooseFileProtection.foregroundOnly, to: sidecarURL)
     let reviewURL = sidecarDirectory.appendingPathComponent("local-health-validation-review.json")
     let reviewData = try JSONSerialization.data(withJSONObject: review, options: [.prettyPrinted, .sortedKeys])
     try reviewData.write(to: reviewURL, options: .atomic)
+    GooseFileProtection.apply(GooseFileProtection.foregroundOnly, to: reviewURL)
     let runbookURL = sidecarDirectory.appendingPathComponent("local-health-validation-runbook.md")
     try runbookMarkdown.write(to: runbookURL, atomically: true, encoding: .utf8)
+    GooseFileProtection.apply(GooseFileProtection.foregroundOnly, to: runbookURL)
     return RawValidationSidecarResult(
       manifestStatus: "Saved \(sidecarURL.lastPathComponent)",
       manifestURL: sidecarURL,

@@ -36,6 +36,10 @@ struct CoachChatScreen: View {
     ScrollViewReader { proxy in
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 12) {
+          if !GooseCoachPolicy.remoteExecutionEnabled {
+            CoachRemoteDisabledNotice()
+          }
+
           if chat.streamState != .idle {
             CoachConnectionStrip(streamState: chat.streamState)
           }
@@ -45,7 +49,7 @@ struct CoachChatScreen: View {
               .id(message.id)
           }
 
-          if chat.messages.count <= 1 {
+          if chat.messages.count <= 1, GooseCoachPolicy.remoteExecutionEnabled {
             CoachSuggestionStack(suggestions: suggestions) { suggestion in
               composerFocused = false
               draft = ""
@@ -80,16 +84,20 @@ struct CoachChatScreen: View {
       }
     }
     .safeAreaInset(edge: .bottom, spacing: 0) {
-      CoachComposer(
-        draft: $draft,
-        focused: $composerFocused,
-        isStreaming: chat.streamState.isStreaming,
-        send: sendDraft,
-        cancel: {
-          composerFocused = false
-          chat.cancelStreaming()
-        }
-      )
+      if GooseCoachPolicy.remoteExecutionEnabled {
+        CoachComposer(
+          draft: $draft,
+          focused: $composerFocused,
+          isStreaming: chat.streamState.isStreaming,
+          send: sendDraft,
+          cancel: {
+            composerFocused = false
+            chat.cancelStreaming()
+          }
+        )
+      } else {
+        CoachRemoteDisabledBar()
+      }
     }
   }
 
@@ -128,6 +136,43 @@ struct CoachChatScreen: View {
     } else {
       action()
     }
+  }
+}
+
+private struct CoachRemoteDisabledNotice: View {
+  var body: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Label(GooseCoachPolicy.disabledTitle, systemImage: "lock.shield")
+        .font(.subheadline.weight(.semibold))
+        .foregroundStyle(.orange)
+      Text(GooseCoachPolicy.disabledSummary)
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    .padding(12)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    .overlay {
+      RoundedRectangle(cornerRadius: 8, style: .continuous)
+        .stroke(Color.orange.opacity(0.30), lineWidth: 1)
+    }
+  }
+}
+
+private struct CoachRemoteDisabledBar: View {
+  var body: some View {
+    Label("Online Coach is disabled for privacy", systemImage: "wifi.slash")
+      .font(.footnote.weight(.semibold))
+      .foregroundStyle(.secondary)
+      .frame(maxWidth: .infinity)
+      .padding(.horizontal, 12)
+      .padding(.vertical, 12)
+      .background(.regularMaterial)
+      .overlay(alignment: .top) {
+        Divider()
+          .opacity(0.6)
+      }
   }
 }
 

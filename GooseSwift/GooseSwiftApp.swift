@@ -8,6 +8,10 @@ struct GooseSwiftApp: App {
 
   init() {
     GooseTheme.configureAppearance()
+    DispatchQueue.global(qos: .utility).async {
+      GooseFileProtection.migrateLegacyDocumentsDiagnostics()
+      GooseFileProtection.protectExistingHealthArtifacts()
+    }
   }
 
   var body: some Scene {

@@ -55,11 +55,13 @@ struct CoachView: View {
       model.recordUIAction("page.opened", detail: "Coach")
       healthStore.loadBridgeCatalogsIfNeeded()
       healthStore.refreshPacketInputsIfNeeded()
-      chat.refreshAuth()
+      if GooseCoachPolicy.remoteExecutionEnabled {
+        chat.refreshAuth()
+      }
       applyRequestedCoachPromptIfNeeded()
     }
     .onChange(of: router.codexEmbeddedLoginRequestID) { _, requestID in
-      guard requestID > 0, !chat.isSignedIn else {
+      guard GooseCoachPolicy.remoteExecutionEnabled, requestID > 0, !chat.isSignedIn else {
         return
       }
       showingChat = true

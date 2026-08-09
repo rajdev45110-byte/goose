@@ -47,8 +47,9 @@ extension GooseLocalDataExporter {
         fileManager: fileManager
       )
     } ?? false
-    let bleLiveLogRelativePath = "Documents/GooseSwift/goose-ble-live.log"
-    let bleLiveLogURL = documentsDirectory
+    let bleLiveLogRelativePath = "Application Support/GooseSwift/goose-ble-live.log"
+    let bleLiveLogURL = (fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+      ?? fileManager.temporaryDirectory)
       .appendingPathComponent("GooseSwift", isDirectory: true)
       .appendingPathComponent("goose-ble-live.log")
     let bleLiveLogIncluded = pathSet.contains(bleLiveLogRelativePath)
@@ -260,7 +261,7 @@ extension GooseLocalDataExporter {
     if requiredOvernightSessionID != nil, bleLogIncluded, bleLogByteCount > 0, !bleLogSessionIDFound {
       issues.append("BLE log side channel does not contain current overnight session ID")
     }
-    if requiredOvernightSessionID != nil, !bleLiveLogIncluded {
+    if requiredOvernightSessionID != nil, GooseDiagnosticsPolicy.loggingEnabled, !bleLiveLogIncluded {
       issues.append("missing always-on BLE live log side channel")
     }
     if requiredOvernightSessionID != nil, bleLiveLogIncluded, bleLiveLogByteCount == 0 {

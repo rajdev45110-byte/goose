@@ -109,17 +109,7 @@ final class GooseBLEClient: NSObject, ObservableObject {
     return processInfo.arguments.contains("--goose-auto-historical-sync")
       || processInfo.environment["GOOSE_AUTO_HISTORICAL_SYNC"] == "1"
   }()
-  let diagnosticLoggingEnabled: Bool = {
-    let processInfo = ProcessInfo.processInfo
-    if processInfo.arguments.contains("--goose-disable-diagnostics")
-      || processInfo.environment["GOOSE_DISABLE_DIAGNOSTICS"] == "1"
-      || processInfo.environment["GOOSE_DIAGNOSTIC_LOGGING"] == "0" {
-      return false
-    }
-    return processInfo.arguments.contains("--goose-enable-diagnostics")
-      || processInfo.environment["GOOSE_ENABLE_DIAGNOSTICS"] == "1"
-      || processInfo.environment["GOOSE_DIAGNOSTIC_LOGGING"] == "1"
-  }()
+  let diagnosticLoggingEnabled = GooseDiagnosticsPolicy.loggingEnabled
   let prioritizeLiveCaptureOnReady: Bool = {
     let processInfo = ProcessInfo.processInfo
     return processInfo.arguments.contains("--goose-start-physiology-capture")
@@ -159,14 +149,7 @@ final class GooseBLEClient: NSObject, ObservableObject {
     return Data([0x73, 0x0a])
   }()
   let diagnosticLogURL: URL? = {
-    let processInfo = ProcessInfo.processInfo
-    let loggingEnabled = processInfo.arguments.contains("--goose-enable-diagnostics")
-      || processInfo.environment["GOOSE_ENABLE_DIAGNOSTICS"] == "1"
-      || processInfo.environment["GOOSE_DIAGNOSTIC_LOGGING"] == "1"
-    let loggingDisabled = processInfo.arguments.contains("--goose-disable-diagnostics")
-      || processInfo.environment["GOOSE_DISABLE_DIAGNOSTICS"] == "1"
-      || processInfo.environment["GOOSE_DIAGNOSTIC_LOGGING"] == "0"
-    guard loggingEnabled, !loggingDisabled else {
+    guard GooseDiagnosticsPolicy.loggingEnabled else {
       return nil
     }
     guard let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
@@ -190,11 +173,11 @@ final class GooseBLEClient: NSObject, ObservableObject {
     let processInfo = ProcessInfo.processInfo
     let mirrorEnabled = processInfo.arguments.contains("--goose-afc-diagnostic-mirror")
       || processInfo.environment["GOOSE_AFC_DIAGNOSTIC_MIRROR"] == "1"
-    guard mirrorEnabled else {
+    guard mirrorEnabled, GooseDiagnosticsPolicy.loggingEnabled else {
       return nil
     }
-    guard let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-      GooseBLEClient.recordDiagnosticLogSetupWarning("goose-ble-live.log mirror setup failed: Documents directory unavailable")
+    guard let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+      GooseBLEClient.recordDiagnosticLogSetupWarning("goose-ble-live.log mirror setup failed: Application Support directory unavailable")
       return nil
     }
     let gooseDirectory = directory.appendingPathComponent("GooseSwift", isDirectory: true)
@@ -208,8 +191,11 @@ final class GooseBLEClient: NSObject, ObservableObject {
     return url
   }()
   let overnightSideChannelLogURL: URL? = {
-    guard let directory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first else {
-      GooseBLEClient.recordDiagnosticLogSetupWarning("goose-ble-live.log setup failed: Documents directory unavailable")
+    guard GooseDiagnosticsPolicy.loggingEnabled else {
+      return nil
+    }
+    guard let directory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+      GooseBLEClient.recordDiagnosticLogSetupWarning("goose-ble-live.log setup failed: Application Support directory unavailable")
       return nil
     }
     let gooseDirectory = directory.appendingPathComponent("GooseSwift", isDirectory: true)

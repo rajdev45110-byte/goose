@@ -112,6 +112,7 @@ private struct CodexTokenExchangeResponse: Decodable {
 }
 
 enum CodexSelfContainedAuthError: Error, LocalizedError {
+  case remoteDisabled
   case invalidURL(String)
   case httpStatus(Int, String)
   case invalidResponse(String)
@@ -120,6 +121,8 @@ enum CodexSelfContainedAuthError: Error, LocalizedError {
 
   var errorDescription: String? {
     switch self {
+    case .remoteDisabled:
+      return GooseCoachPolicy.disabledSummary
     case .invalidURL(let url):
       return "Invalid auth URL: \(url)"
     case .httpStatus(let status, let body):
@@ -149,6 +152,9 @@ actor CodexSelfContainedAuthClient {
   }
 
   func requestDeviceCode() async throws -> CodexSelfContainedDeviceCode {
+    guard GooseCoachPolicy.remoteExecutionEnabled else {
+      throw CodexSelfContainedAuthError.remoteDisabled
+    }
     let response: CodexDeviceCodeResponse = try await postJSON(
       path: "/api/accounts/deviceauth/usercode",
       body: CodexDeviceCodeRequest(clientID: clientID)
@@ -182,6 +188,9 @@ actor CodexSelfContainedAuthClient {
   }
 
   func completeDeviceCodeLogin(_ deviceCode: CodexSelfContainedDeviceCode) async throws -> CodexStoredChatGPTAuth {
+    guard GooseCoachPolicy.remoteExecutionEnabled else {
+      throw CodexSelfContainedAuthError.remoteDisabled
+    }
     let pollResponse = try await pollForAuthorizationCode(deviceCode)
     let tokenResponse = try await exchangeCodeForTokens(pollResponse)
     guard let idToken = tokenResponse.idToken,
@@ -263,6 +272,9 @@ actor CodexSelfContainedAuthClient {
   }
 
   private func refreshStoredAuth(_ auth: CodexStoredChatGPTAuth) async throws -> CodexStoredChatGPTAuth {
+    guard GooseCoachPolicy.remoteExecutionEnabled else {
+      throw CodexSelfContainedAuthError.remoteDisabled
+    }
     guard let url = URL(string: "\(issuer)/oauth/token") else {
       throw CodexSelfContainedAuthError.invalidURL("\(issuer)/oauth/token")
     }
