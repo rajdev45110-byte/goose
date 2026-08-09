@@ -8,6 +8,10 @@ struct GooseSwiftApp: App {
 
   init() {
     GooseTheme.configureAppearance()
+    GooseFileProtection.prepareLocalStores()
+    DispatchQueue.global(qos: .utility).async {
+      GooseFileProtection.runDeepMigrationIfNeeded()
+    }
   }
 
   var body: some Scene {
@@ -31,6 +35,7 @@ struct GooseSwiftApp: App {
           case .inactive:
             model.handleAppLifecycleChange("inactive")
           case .background:
+            GooseFileProtection.prepareLocalStores()
             model.handleAppLifecycleChange("background")
           @unknown default:
             model.handleAppLifecycleChange("unknown")

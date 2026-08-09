@@ -76,7 +76,6 @@ extension GooseLocalDataExporter {
 
   static func includedBLELogURLs(
     pathSet: Set<String>,
-    documentsDirectory: URL,
     fileManager: FileManager
   ) -> [URL] {
     var urls: [URL] = []
@@ -88,9 +87,10 @@ extension GooseLocalDataExporter {
           .appendingPathComponent("goose-ble.log")
       )
     }
-    if pathSet.contains("Documents/GooseSwift/goose-ble-live.log") {
+    if pathSet.contains("Application Support/GooseSwift/goose-ble-live.log"),
+       let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
       urls.append(
-        documentsDirectory
+        appSupport
           .appendingPathComponent("GooseSwift", isDirectory: true)
           .appendingPathComponent("goose-ble-live.log")
       )
@@ -308,10 +308,10 @@ extension GooseLocalDataExporter {
         || relativePath == "goose.sqlite-wal"
         || relativePath == "goose.sqlite-shm"
         || relativePath == "goose-ble.log"
+        || relativePath == "goose-ble-live.log"
         || relativePath.hasPrefix("goose-ble.")
     case "Documents/GooseSwift":
-      return relativePath == "goose-ble-live.log"
-        || relativePath.hasPrefix("OvernightGuard/\(requiredOvernightSessionID)/")
+      return relativePath.hasPrefix("OvernightGuard/\(requiredOvernightSessionID)/")
     case "Library/Preferences":
       return true
     default:

@@ -13,6 +13,7 @@ struct OpenAIResponseStreamEvent {
 }
 
 enum OpenAIResponsesError: Error, LocalizedError {
+  case remoteDisabled
   case missingOAuthSession
   case missingAccountID
   case invalidURL
@@ -23,6 +24,8 @@ enum OpenAIResponsesError: Error, LocalizedError {
 
   var errorDescription: String? {
     switch self {
+    case .remoteDisabled:
+      return GooseCoachPolicy.disabledSummary
     case .missingOAuthSession:
       return "Sign in first."
     case .missingAccountID:
@@ -158,6 +161,9 @@ struct OpenAIResponsesClient {
     body: [String: Any],
     onEvent: @MainActor @escaping (OpenAIResponseStreamEvent) throws -> Void
   ) async throws {
+    guard GooseCoachPolicy.remoteExecutionEnabled else {
+      throw OpenAIResponsesError.remoteDisabled
+    }
     guard let endpoint else {
       throw OpenAIResponsesError.invalidURL
     }

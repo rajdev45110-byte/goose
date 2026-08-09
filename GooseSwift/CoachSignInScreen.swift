@@ -18,7 +18,9 @@ struct CoachSignInScreen: View {
 
           Text("Sign in to Coach")
             .font(.title2.bold())
-          Text("Sign in to stream Coach replies and local Goose tool calls.")
+          Text(GooseCoachPolicy.remoteExecutionEnabled
+               ? "Sign in to stream Coach replies and local Goose tool calls."
+               : GooseCoachPolicy.disabledSummary)
             .font(.subheadline)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
@@ -28,6 +30,15 @@ struct CoachSignInScreen: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
         VStack(alignment: .leading, spacing: 12) {
+          if !GooseCoachPolicy.remoteExecutionEnabled {
+            Label(GooseCoachPolicy.disabledTitle, systemImage: "lock.shield")
+              .font(.subheadline.weight(.semibold))
+              .foregroundStyle(.orange)
+            Text("Your health data stays on this device. Coach sign-in and all Coach network requests are blocked in this build.")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          } else {
           CoachStatusLine(title: "Sign in", value: loginStatus)
 
           if let deviceCode {
@@ -59,6 +70,7 @@ struct CoachSignInScreen: View {
             .font(.footnote)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+          }
         }
         .padding(16)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))

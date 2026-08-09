@@ -3,6 +3,7 @@ import Foundation
 @MainActor
 final class OpenAICoachChatModel: ObservableObject {
   @Published private(set) var isSignedIn = false
+  @Published private(set) var hasStoredCredentials = false
   @Published private(set) var deviceCode: CodexLoginDeviceCode?
   @Published private(set) var loginStatus = "Not signed in"
   @Published private(set) var modelPreset: CoachModelPreset
@@ -33,6 +34,13 @@ final class OpenAICoachChatModel: ObservableObject {
   }
 
   func refreshAuth() {
+    guard GooseCoachPolicy.remoteExecutionEnabled else {
+      auth = nil
+      isSignedIn = false
+      deviceCode = nil
+      loginStatus = GooseCoachPolicy.disabledTitle
+      return
+    }
     Task { [weak self, authClient] in
       do {
         if let storedAuth = try await authClient.storedAuth(refreshIfNeeded: true) {
@@ -63,16 +71,52 @@ final class OpenAICoachChatModel: ObservableObject {
   }
 
   func startNewConversation() {
+    clearLocalConversation()
+    seedAssistantPromptIfNeeded()
+  }
+
+  /// Local-only history clear. Cancels any in-flight task, drops the in-memory
+  /// transcript, and removes the persisted copy from UserDefaults. Touches no
+  /// auth state, no Keychain entry, and makes no network request.
+  func clearLocalConversation() {
     sendTask?.cancel()
     sendTask = nil
     streamState = .idle
     errorMessage = nil
     messages.removeAll()
     CoachConversationStore.clear()
-    seedAssistantPromptIfNeeded()
+  }
+
+  /// Local-only Keychain presence check. Reads the stored item directly rather
+  /// than going through `storedAuth(refreshIfNeeded:)` so there is no path to a
+  /// token refresh, and therefore no network request.
+  func refreshStoredCredentialPresence() {
+    hasStoredCredentials = ((try? CodexSelfContainedAuthKeychain.load()) ?? nil) != nil
+  }
+
+  /// Local-only credential clear. Deletes the stored ChatGPT auth from the
+  /// Keychain and drops the in-memory copy. Makes no network request and leaves
+  /// the local transcript untouched.
+  func forgetStoredCredentials() {
+    loginTask?.cancel()
+    loginTask = nil
+    auth = nil
+    deviceCode = nil
+    isSignedIn = false
+    do {
+      try CodexSelfContainedAuthKeychain.delete()
+      hasStoredCredentials = false
+    } catch {
+      errorMessage = describe(error)
+    }
   }
 
   func startOAuthSignIn() {
+    guard GooseCoachPolicy.remoteExecutionEnabled else {
+      loginStatus = GooseCoachPolicy.disabledTitle
+      errorMessage = GooseCoachPolicy.disabledSummary
+      return
+    }
     loginTask?.cancel()
     loginStatus = "Requesting OAuth code"
     deviceCode = nil
@@ -137,6 +181,11 @@ final class OpenAICoachChatModel: ObservableObject {
   ) {
     let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedPrompt.isEmpty, !streamState.isStreaming else {
+      return
+    }
+    guard GooseCoachPolicy.remoteExecutionEnabled else {
+      errorMessage = GooseCoachPolicy.disabledSummary
+      streamState = .idle
       return
     }
     guard let auth else {

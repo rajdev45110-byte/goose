@@ -34,7 +34,7 @@ struct CoachView: View {
       NavigationStack {
         chatSheetContent
           .gooseScreenBackground()
-          .navigationTitle(chat.isSignedIn ? "Coach Chat" : "Coach Sign In")
+          .navigationTitle(sheetTitle)
           .navigationBarTitleDisplayMode(.inline)
           .toolbarBackground(.hidden, for: .navigationBar)
           .toolbar {
@@ -55,11 +55,15 @@ struct CoachView: View {
       model.recordUIAction("page.opened", detail: "Coach")
       healthStore.loadBridgeCatalogsIfNeeded()
       healthStore.refreshPacketInputsIfNeeded()
-      chat.refreshAuth()
+      if GooseCoachPolicy.remoteExecutionEnabled {
+        chat.refreshAuth()
+      } else {
+        chat.refreshStoredCredentialPresence()
+      }
       applyRequestedCoachPromptIfNeeded()
     }
     .onChange(of: router.codexEmbeddedLoginRequestID) { _, requestID in
-      guard requestID > 0, !chat.isSignedIn else {
+      guard GooseCoachPolicy.remoteExecutionEnabled, requestID > 0, !chat.isSignedIn else {
         return
       }
       showingChat = true
@@ -72,7 +76,7 @@ struct CoachView: View {
 
   @ViewBuilder
   private var chatSheetContent: some View {
-    if chat.isSignedIn {
+    if chat.isSignedIn || !GooseCoachPolicy.remoteExecutionEnabled {
       CoachChatScreen(
         chat: chat,
         healthStore: healthStore,
@@ -90,7 +94,17 @@ struct CoachView: View {
     }
   }
 
+  private var sheetTitle: String {
+    if !GooseCoachPolicy.remoteExecutionEnabled {
+      return "Coach History"
+    }
+    return chat.isSignedIn ? "Coach Chat" : "Coach Sign In"
+  }
+
   private var chatStatus: String {
+    guard GooseCoachPolicy.remoteExecutionEnabled else {
+      return "Disabled for privacy"
+    }
     if chat.isSignedIn {
       return chat.streamState.isStreaming ? "Streaming" : "Signed in"
     }
