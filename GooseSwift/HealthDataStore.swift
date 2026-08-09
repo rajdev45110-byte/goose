@@ -72,12 +72,9 @@ final class HealthDataStore: ObservableObject {
   }
 
   static func defaultDatabasePath() -> String {
-    let directory = GooseFileProtection.applicationSupportDirectory()
-    let path = directory.appendingPathComponent("goose.sqlite").path
-    for suffix in ["", "-wal", "-shm"] {
-      GooseFileProtection.apply(GooseFileProtection.backgroundWritable, to: URL(fileURLWithPath: path + suffix))
-    }
-    return path
+    GooseFileProtection.applicationSupportDirectoryURL()
+      .appendingPathComponent("goose.sqlite")
+      .path
   }
 
   var usesSampleData: Bool {

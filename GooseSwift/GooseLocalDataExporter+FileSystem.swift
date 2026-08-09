@@ -76,7 +76,6 @@ extension GooseLocalDataExporter {
 
   static func includedBLELogURLs(
     pathSet: Set<String>,
-    documentsDirectory: URL,
     fileManager: FileManager
   ) -> [URL] {
     var urls: [URL] = []

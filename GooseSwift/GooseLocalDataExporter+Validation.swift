@@ -37,7 +37,7 @@ extension GooseLocalDataExporter {
     var crashMarkerFinalized = false
     let sqliteDatabasePath = defaultDatabasePath()
     let sqliteDatabaseIncluded = pathSet.contains("Application Support/GooseSwift/goose.sqlite")
-    let bleLogURLs = includedBLELogURLs(pathSet: pathSet, documentsDirectory: documentsDirectory, fileManager: fileManager)
+    let bleLogURLs = includedBLELogURLs(pathSet: pathSet, fileManager: fileManager)
     let bleLogIncluded = !bleLogURLs.isEmpty
     let bleLogByteCount = currentBLELogByteCount(logURLs: bleLogURLs, fileManager: fileManager)
     let bleLogSessionIDFound = requiredOvernightSessionID.map {
