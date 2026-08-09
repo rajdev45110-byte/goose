@@ -234,9 +234,11 @@ extension GooseLocalDataExporter {
       roots.append(("Application Support/GooseSwift", appSupport.appendingPathComponent("GooseSwift", isDirectory: true)))
     }
     roots.append(("Documents/GooseSwift", documentsDirectory.appendingPathComponent("GooseSwift", isDirectory: true)))
-    if let library = fileManager.urls(for: .libraryDirectory, in: .userDomainMask).first {
-      roots.append(("Library/Preferences", library.appendingPathComponent("Preferences", isDirectory: true)))
-    }
+    // Library/Preferences is deliberately excluded. The app's UserDefaults plist
+    // holds profile identity (first name, date of birth, sex, height, weight),
+    // the persisted Coach transcript, and cached HRV/resting-HR values. None of
+    // it is needed to diagnose capture, and all of it leaves the device when a
+    // user shares an export bundle.
     return roots
   }
 
@@ -312,8 +314,6 @@ extension GooseLocalDataExporter {
         || relativePath.hasPrefix("goose-ble.")
     case "Documents/GooseSwift":
       return relativePath.hasPrefix("OvernightGuard/\(requiredOvernightSessionID)/")
-    case "Library/Preferences":
-      return true
     default:
       return false
     }
