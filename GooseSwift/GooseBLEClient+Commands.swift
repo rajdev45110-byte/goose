@@ -83,17 +83,28 @@ extension GooseBLEClient {
     }
   }
 
+  /// Unified-log sink for every `record(...)` call.
+  ///
+  /// `source` and `title` are event identifiers chosen at the call site and
+  /// stay public so operational diagnostics remain greppable in Console and
+  /// sysdiagnose. Every current `record(title:)` argument resolves to an
+  /// identifier literal — keep it that way, and never interpolate a
+  /// measurement into a title.
+  ///
+  /// `body` is free-form and carries heart-rate values, raw packet hex,
+  /// battery and firmware detail, and file paths, so it is always redacted.
   func writeOSLog(_ message: GooseMessage) {
-    let line = "\(message.source) \(message.title) \(message.body)"
+    let event = "\(message.source) \(message.title)"
+    let detail = message.body
     switch message.level {
     case .debug:
-      logger.debug("\(line, privacy: .public)")
+      logger.debug("\(event, privacy: .public) \(detail, privacy: .private)")
     case .info:
-      logger.info("\(line, privacy: .public)")
+      logger.info("\(event, privacy: .public) \(detail, privacy: .private)")
     case .warn:
-      logger.warning("\(line, privacy: .public)")
+      logger.warning("\(event, privacy: .public) \(detail, privacy: .private)")
     case .error:
-      logger.error("\(line, privacy: .public)")
+      logger.error("\(event, privacy: .public) \(detail, privacy: .private)")
     }
   }
 

@@ -308,8 +308,13 @@ extension GooseBLEClient {
   }
 
   func logDiagnosticLogError(url: URL, error: Error) {
-    let message = "\(url.path): \(String(describing: error))"
-    logger.error("BLE diagnostic log write failed: \(message, privacy: .public)")
+    // Log the file name plus the error domain and code only. The full path
+    // carries the app container UUID, and a Cocoa error's description embeds
+    // NSFilePath, so neither is safe to publish.
+    let nsError = error as NSError
+    logger.error(
+      "BLE diagnostic log write failed: file=\(url.lastPathComponent, privacy: .public) domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)"
+    )
   }
 
   static func prepareDiagnosticLogFile(at url: URL, directory: URL) throws {
@@ -335,7 +340,7 @@ extension GooseBLEClient {
     }
     diagnosticLogSetupWarningLock.unlock()
     Logger(subsystem: "com.goose.swift", category: "ble")
-      .error("BLE diagnostic log setup failed: \(warning, privacy: .public)")
+      .error("BLE diagnostic log setup failed: \(warning, privacy: .private)")
   }
 
   static func diagnosticLogSetupWarningSnapshot() -> [String] {
