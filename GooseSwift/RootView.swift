@@ -30,6 +30,40 @@ struct RootView: View {
       mirrorCurrentOnboardingStateIfNeeded()
       syncModelOnboardingState()
     }
+    .alert(
+      "Send debug command to your WHOOP?",
+      isPresented: Binding(
+        get: { model.pendingDeepLinkDebugCommand != nil },
+        set: { presented in
+          if !presented {
+            model.cancelPendingDeepLinkDebugCommand()
+          }
+        }
+      ),
+      presenting: model.pendingDeepLinkDebugCommand
+    ) { _ in
+      // Cancel is the default/dismiss action; nothing is written unless Send is tapped.
+      Button("Cancel", role: .cancel) {
+        model.cancelPendingDeepLinkDebugCommand()
+      }
+      Button("Send", role: .destructive) {
+        model.confirmPendingDeepLinkDebugCommand()
+      }
+    } message: { pending in
+      Text(
+        """
+        A link asked Goose to send "\(pending.title)" to your strap.
+
+        Command: \(pending.commandID)
+        Risk: \(pending.risk)
+        Payload: \(pending.payloadSummary)
+
+        \(pending.detail)
+
+        Nothing has been sent yet.
+        """
+      )
+    }
   }
 
   private func mirrorCurrentOnboardingStateIfNeeded() {

@@ -1,6 +1,23 @@
 import Foundation
 import UIKit
 
+/// A deep-link debug command that has been parsed and is awaiting explicit user
+/// approval. Holding this value performs no BLE write of any kind.
+struct PendingDeepLinkDebugCommand: Identifiable, Equatable {
+  let id = UUID()
+  let commandID: String
+  let payloadHex: String?
+  let title: String
+  let risk: String
+  let detail: String
+
+  var payloadSummary: String {
+    guard let payloadHex, !payloadHex.isEmpty else {
+      return "none"
+    }
+    return payloadHex
+  }
+}
 
 extension GooseAppModel {
   func handleAppLifecycleChange(_ phase: String) {
@@ -63,9 +80,49 @@ extension GooseAppModel {
       return true
     }
 
-    ble.record(source: "ui", title: "debug_command.deep_link", body: "\(commandID) payload=\(payloadHex ?? "nil")")
-    _ = ble.sendDebugResearchCommand(id: commandID, payloadHex: payloadHex, source: "deep_link")
+    // Parse only. A deep link can be opened by any app or web page, so nothing
+    // is written to the strap here — the command is staged for explicit
+    // confirmation and sent from `confirmPendingDeepLinkDebugCommand()`.
+    let normalizedID = commandID.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    guard let definition = ble.debugResearchCommands.first(where: { $0.id == normalizedID }) else {
+      ble.record(level: .warn, source: "ble.debug_command", title: "deep_link.unknown_command", body: normalizedID)
+      pendingDeepLinkDebugCommand = nil
+      return true
+    }
+
+    ble.record(source: "ui", title: "debug_command.deep_link.staged", body: "\(normalizedID) payload=\(payloadHex ?? "nil")")
+    pendingDeepLinkDebugCommand = PendingDeepLinkDebugCommand(
+      commandID: definition.id,
+      payloadHex: payloadHex,
+      title: definition.title,
+      risk: definition.risk,
+      detail: definition.detail
+    )
     return true
+  }
+
+  /// Sends the staged deep-link command. This is the only path from a deep link
+  /// to a BLE write, and it is reachable only from an explicit user action.
+  func confirmPendingDeepLinkDebugCommand() {
+    guard let pending = pendingDeepLinkDebugCommand else {
+      return
+    }
+    pendingDeepLinkDebugCommand = nil
+    ble.record(source: "ui", title: "debug_command.deep_link.confirmed", body: pending.commandID)
+    _ = ble.sendDebugResearchCommand(
+      id: pending.commandID,
+      payloadHex: pending.payloadHex,
+      source: "deep_link"
+    )
+  }
+
+  /// Discards the staged command without sending anything.
+  func cancelPendingDeepLinkDebugCommand() {
+    guard let pending = pendingDeepLinkDebugCommand else {
+      return
+    }
+    pendingDeepLinkDebugCommand = nil
+    ble.record(source: "ui", title: "debug_command.deep_link.cancelled", body: pending.commandID)
   }
 
   func refreshHeartRateHourlyRanges(for date: Date = Date()) {

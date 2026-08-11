@@ -5,6 +5,9 @@ import UIKit
 @MainActor
 final class GooseAppModel: ObservableObject {
   @Published var onboardingComplete = false
+  /// A `gooseswift://debug-command` link that has been parsed but NOT sent.
+  /// Nothing reaches the strap until the user confirms it.
+  @Published var pendingDeepLinkDebugCommand: PendingDeepLinkDebugCommand?
   @Published var rustStatus = "Rust bridge not checked"
   @Published var helloSummary = "Client hello not prepared"
   @Published var packetImportRevision = 0
