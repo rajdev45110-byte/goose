@@ -113,19 +113,27 @@ enum OnboardingProfilePersistence {
   private static let keychainService = "com.goose.swift.onboarding"
   private static let keychainAccount = "profile"
 
+  /// Keychain is authoritative. The Keychain item is
+  /// `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`, so unlike the previous
+  /// UserDefaults blob it does not ride a device backup onto a new device.
+  ///
+  /// The individual `goose.swift.profile.*` keys are deliberately left in
+  /// UserDefaults: they back the `@AppStorage` bindings used by onboarding and
+  /// profile editing, and they keep a downgrade to an older build working.
   static func loadState() -> OnboardingPersistedState? {
-    if let data = UserDefaults.standard.data(forKey: OnboardingStorage.persistedState),
+    if let data = readKeychainData(),
        let state = try? JSONDecoder().decode(OnboardingPersistedState.self, from: data) {
       return state
     }
-    guard
-      let data = readKeychainData(),
-      let state = try? JSONDecoder().decode(OnboardingPersistedState.self, from: data)
-    else {
-      return legacyStateFromDefaults()
+    // Migrate a blob written by an earlier build: copy it into the Keychain
+    // first, confirm it reads back, and only then drop the duplicate.
+    if let data = UserDefaults.standard.data(forKey: OnboardingStorage.persistedState),
+       let state = try? JSONDecoder().decode(OnboardingPersistedState.self, from: data) {
+      writeKeychainData(data)
+      removePersistedStateDefaultsIfKeychainHolds(data)
+      return state
     }
-    UserDefaults.standard.set(data, forKey: OnboardingStorage.persistedState)
-    return state
+    return legacyStateFromDefaults()
   }
 
   @discardableResult
@@ -179,8 +187,18 @@ enum OnboardingProfilePersistence {
     guard let data = try? JSONEncoder().encode(state) else {
       return
     }
-    UserDefaults.standard.set(data, forKey: OnboardingStorage.persistedState)
     writeKeychainData(data)
+    removePersistedStateDefaultsIfKeychainHolds(data)
+  }
+
+  /// Drops the legacy UserDefaults blob only once the Keychain is confirmed to
+  /// hold the same bytes. If the Keychain write failed the duplicate is kept,
+  /// so no path can delete the only copy of the profile.
+  private static func removePersistedStateDefaultsIfKeychainHolds(_ data: Data) {
+    guard readKeychainData() == data else {
+      return
+    }
+    UserDefaults.standard.removeObject(forKey: OnboardingStorage.persistedState)
   }
 
   private static func legacyStateFromDefaults() -> OnboardingPersistedState? {
@@ -220,7 +238,12 @@ enum OnboardingProfilePersistence {
 
   private static func writeKeychainData(_ data: Data) {
     let query = keychainQuery()
-    let attributes: [String: Any] = [kSecValueData as String: data]
+    // Re-assert the accessibility class on update so an item created by an
+    // older build cannot retain a weaker class.
+    let attributes: [String: Any] = [
+      kSecValueData as String: data,
+      kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+    ]
     let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
     if status == errSecItemNotFound {
       var addQuery = query
