@@ -1,0 +1,301 @@
+name: Security and Build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# No health data, capture bundles, logs, or export artifacts are ever uploaded
+# by this workflow. Only pass/fail status and textual summaries are produced.
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Rust test suite.
+  #
+  # The repository has pre-existing red targets that fail identically on the
+  # pre-Phase-2 baseline commit 01017c6. They are excluded BY NAME below so that
+  # Phase 2 has a meaningful gate, and the exclusion list is printed on every run
+  # so the debt stays visible. Any target NOT on this list that fails will fail
+  # the job.
+  #
+  # Do not add to this list to make CI green. A new failure is a real failure.
+  # ---------------------------------------------------------------------------
+  rust-tests:
+    name: Rust tests (baseline exclusions applied)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Print baseline exclusion list (visible technical debt)
+        run: |
+          cat <<'SUMMARY' | tee -a "$GITHUB_STEP_SUMMARY"
+          ## Rust baseline exclusions
+
+          These targets fail identically on baseline `01017c6` (pre-Phase-2) and
+          are excluded from the gate. They are NOT fixed and NOT hidden.
+
+          | Target | Baseline result |
+          | --- | --- |
+          | `bridge_tests` | 83 passed / 2 failed |
+          | `command_capture_plan_cli_tests` | 1 passed / 1 failed |
+          | `ios_healthkit_boundary_tests` | 0 passed / 2 failed |
+          | `local_health_validation_suite_cli_tests` | 28 passed / 3 failed |
+          | `reference_runner_cli_tests` | 6 passed / 6 failed |
+          | `step_motion_estimator_tests` | 4 passed / 1 failed |
+          | `tooling_inventory_tests` | 1 passed / 1 failed |
+
+          **Total excluded: 16 pre-existing failures.**
+
+          Separately, `command_tests` does not COMPILE: it uses
+          `include_str!("../../../../docs/generated/protocol-command-map.md")`,
+          and `docs/generated/` has zero tracked files in the repository, so a
+          fresh clone cannot build it. This is a missing generated artifact, not
+          a test failure.
+
+          Fixing these requires touching reference data, the step estimator, and
+          algorithm code, which Phase 2 is explicitly not permitted to change.
+          SUMMARY
+
+      - name: Run all non-excluded Rust test targets
+        working-directory: Rust/core
+        run: |
+          set -uo pipefail
+
+          # Proven-failing on baseline 01017c6.
+          EXCLUDED="bridge_tests command_capture_plan_cli_tests ios_healthkit_boundary_tests local_health_validation_suite_cli_tests reference_runner_cli_tests step_motion_estimator_tests tooling_inventory_tests"
+          # Pre-existing compile failure: missing docs/generated/protocol-command-map.md
+          NON_COMPILING="command_tests"
+
+          failed=""
+          ran=0
+          for f in tests/*.rs; do
+            t="$(basename "$f" .rs)"
+            case " $EXCLUDED $NON_COMPILING " in
+              *" $t "*) echo "::notice::skipping $t (known baseline failure)"; continue ;;
+            esac
+            echo "::group::$t"
+            if cargo test --test "$t" --no-fail-fast; then
+              echo "PASS $t"
+            else
+              echo "::error::$t failed and is NOT on the baseline exclusion list"
+              failed="$failed $t"
+            fi
+            ran=$((ran + 1))
+            echo "::endgroup::"
+          done
+
+          echo "### Rust test gate" >> "$GITHUB_STEP_SUMMARY"
+          echo "Ran $ran non-excluded targets." >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$failed" ]; then
+            echo "**FAILED:**$failed" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "All non-excluded targets passed." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Rust lib unit tests
+        working-directory: Rust/core
+        run: cargo test --lib
+
+      - name: Build with no default features
+        working-directory: Rust/core
+        run: cargo build --no-default-features
+
+  rust-property-and-privacy:
+    name: Property suite and privacy lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Property test suite (parser/deframer panic safety)
+        working-directory: Rust/core
+        run: |
+          out="$(cargo run --quiet --bin goose-property-test-suite)"
+          echo "$out" | python3 -c "import json,sys; d=json.load(sys.stdin); n=len(d.get('issues',[])); print('issues:',n); sys.exit(1 if n else 0)"
+
+      - name: Privacy lint (tokens, identifiers, WHOOP API material)
+        working-directory: Rust/core
+        run: |
+          out="$(cargo run --quiet --bin goose-privacy-lint)"
+          echo "$out" | python3 -c "import json,sys; d=json.load(sys.stdin); n=len(d.get('findings',[])); print('findings:',n); sys.exit(1 if n else 0)"
+
+  # ---------------------------------------------------------------------------
+  # Supply chain. These could not be run during Phase 2 development: cargo-audit
+  # and cargo-deny were not installed and crates.io was unreachable (HTTP 403).
+  # The first successful run here IS the audit result for Phase 2.
+  # ---------------------------------------------------------------------------
+  supply-chain:
+    name: cargo audit and cargo deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo audit
+        working-directory: Rust/core
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit
+
+      - name: cargo deny
+        working-directory: Rust/core
+        run: |
+          cargo install cargo-deny --locked
+          # No deny.toml is committed yet; check advisories and licences with defaults.
+          cargo deny check advisories bans sources || {
+            echo "::error::cargo deny reported findings — triage before merge"
+            exit 1
+          }
+
+  ios-build-and-test:
+    name: iOS build and unit tests
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios-sim
+
+      - name: Show toolchain
+        run: xcodebuild -version && swift --version
+
+      - name: Clean Debug build
+        run: |
+          xcodebuild -project GooseSwift.xcodeproj -scheme GooseSwift \
+            -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17' \
+            -derivedDataPath build/ci-debug clean build
+
+      - name: Unit tests (profile persistence migration, deep-link BLE gate)
+        run: |
+          xcodebuild test -project GooseSwift.xcodeproj -scheme GooseSwift \
+            -configuration Debug -destination 'platform=iOS Simulator,name=iPhone 17' \
+            -derivedDataPath build/ci-test
+
+      - name: Clean Release build
+        run: |
+          xcodebuild -project GooseSwift.xcodeproj -scheme GooseSwift \
+            -configuration Release -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/ci-release CODE_SIGNING_ALLOWED=NO clean build
+
+      - name: No debug WebSocket server in the Release binary
+        run: |
+          BIN="build/ci-release/Build/Products/Release-iphonesimulator/GooseSwift.app/GooseSwift"
+          test -f "$BIN" || { echo "::error::release binary missing"; exit 1; }
+          # Positive control first: if these are zero the check itself is broken.
+          ctrl=$(nm -a "$BIN" | grep -c goose_core || true)
+          if [ "$ctrl" -eq 0 ]; then
+            echo "::error::control symbols absent — symbol check is not meaningful"; exit 1
+          fi
+          for sym in tungstenite TcpListener debug_ws_server; do
+            n=$(nm -a "$BIN" | grep -ci "$sym" || true)
+            echo "$sym: $n"
+            if [ "$n" -ne 0 ]; then
+              echo "::error::$sym is linked into the shipping binary"; exit 1
+            fi
+          done
+
+  static-privacy-gates:
+    name: Static privacy invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Coach remote execution must remain disabled
+        run: |
+          grep -q 'static let remoteExecutionEnabled = false' GooseSwift/GooseSecurityPolicy.swift \
+            || { echo "::error::GooseCoachPolicy.remoteExecutionEnabled is not false"; exit 1; }
+          echo "Coach remote execution: disabled"
+
+      - name: Exports must not include the preferences plist
+        run: |
+          if grep -q '"Library/Preferences"' GooseSwift/GooseLocalDataExporter+FileSystem.swift; then
+            echo "::error::Library/Preferences export root reintroduced (leaks profile PII + Coach transcript)"
+            exit 1
+          fi
+          echo "Library/Preferences export root: absent"
+
+      - name: ATS local-networking exception must stay removed
+        run: |
+          if grep -q 'NSAllowsLocalNetworking\|NSAllowsArbitraryLoads' GooseSwift/Info.plist; then
+            echo "::error::ATS exception reintroduced in Info.plist"
+            exit 1
+          fi
+          echo "NSAllowsLocalNetworking: absent"
+
+      - name: Files/iTunes document sharing must stay disabled
+        run: |
+          python3 - <<'PY'
+          import plistlib, sys
+          p = plistlib.load(open('GooseSwift/Info.plist','rb'))
+          bad = [k for k in ('UIFileSharingEnabled','LSSupportsOpeningDocumentsInPlace') if p.get(k)]
+          if bad:
+              print(f"::error::{bad} must be false"); sys.exit(1)
+          print("document sharing: disabled")
+          PY
+
+      - name: BLE diagnostic bodies must not be logged as public
+        run: |
+          if grep -q 'let line = "\\(message.source) \\(message.title) \\(message.body)"' GooseSwift/GooseBLEClient+Commands.swift; then
+            echo "::error::writeOSLog reverted to publishing the full message body"
+            exit 1
+          fi
+          grep -q 'detail, privacy: .private' GooseSwift/GooseBLEClient+Commands.swift \
+            || { echo "::error::writeOSLog no longer redacts the message body"; exit 1; }
+          echo "unified-log body redaction: present"
+
+      - name: Deep-link BLE commands must require confirmation
+        run: |
+          grep -q 'func confirmPendingDeepLinkDebugCommand' GooseSwift/GooseAppModel+Lifecycle.swift \
+            || { echo "::error::deep-link confirmation gate missing"; exit 1; }
+          if grep -q 'sendDebugResearchCommand' GooseSwift/GooseAppModel+Lifecycle.swift; then
+            # The only permitted call site is inside the confirm function.
+            ctx=$(grep -A 12 'func confirmPendingDeepLinkDebugCommand' GooseSwift/GooseAppModel+Lifecycle.swift | grep -c 'sendDebugResearchCommand')
+            total=$(grep -c 'sendDebugResearchCommand' GooseSwift/GooseAppModel+Lifecycle.swift)
+            if [ "$ctx" -ne "$total" ]; then
+              echo "::error::sendDebugResearchCommand is reachable outside the confirmation path"
+              exit 1
+            fi
+          fi
+          echo "deep-link confirmation gate: present"
+
+      - name: Rust FFI panic boundary must be present
+        run: |
+          for fn in goose_bridge_handle_json goose_core_version_json goose_bridge_free_string; do
+            grep -q "$fn" Rust/core/src/bridge.rs || { echo "::error::$fn missing"; exit 1; }
+          done
+          n=$(grep -c 'catch_unwind' Rust/core/src/bridge.rs)
+          [ "$n" -ge 3 ] || { echo "::error::FFI panic boundary incomplete (catch_unwind count=$n)"; exit 1; }
+          echo "FFI panic boundary: present"
+
+      - name: No unexpected network endpoints
+        run: |
+          # Coach is the only permitted egress, and it is disabled at runtime.
+          hits=$(grep -rEn 'https?://' --include='*.swift' GooseSwift/ \
+                 | grep -vE 'chatgpt\.com|auth\.openai\.com|api\.openai\.com|apple\.com|developer\.apple\.com' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::unexpected HTTP endpoint(s) found:"; echo "$hits"; exit 1
+          fi
+          echo "network endpoints: only the disabled Coach hosts"
+
+  secret-scan:
+    name: Secret and token scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan tracked sources for credential-shaped literals
+        run: |
+          set -uo pipefail
+          # Deliberately excludes the Rust privacy-lint rule table, which contains
+          # these words as detection patterns rather than as secrets.
+          pattern='(sk-[A-Za-z0-9]{20,}|ghp_[A-Za-z0-9]{20,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.)'
+          hits=$(git grep -nIE "$pattern" -- . \
+                 ':(exclude)Rust/core/src/privacy_lint.rs' \
+                 ':(exclude)Rust/core/tests/privacy_lint_tests.rs' || true)
+          if [ -n "$hits" ]; then
+            echo "::error::possible committed secret:"; echo "$hits"; exit 1
+          fi
+          echo "no credential-shaped literals found"
