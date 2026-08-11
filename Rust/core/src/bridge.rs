@@ -3,6 +3,7 @@ use std::{
     ffi::{CStr, CString},
     fs,
     os::raw::c_char,
+    panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
     ptr,
     time::Instant,
@@ -2496,9 +2497,30 @@ fn handle_bridge_request_inner(request: BridgeRequest) -> BridgeResponse {
     }
 }
 
+/// Panic boundary for the C ABI.
+///
+/// Unwinding out of an `extern "C"` function is undefined behaviour. Release
+/// builds set `panic = "abort"`, which prevents that by terminating instead;
+/// debug builds unwind by default, which is exactly the UB case. Every exported
+/// entry point below therefore runs its body inside `catch_unwind` and converts
+/// a caught panic into the normal `BridgeResponse` error envelope, so Swift sees
+/// a structured failure rather than a crash or an unwind across the boundary.
+///
+/// `AssertUnwindSafe` is required because the bodies touch `&mut` state and raw
+/// pointers; that is sound here because a caught panic discards all intermediate
+/// state and returns an owned, freshly allocated response.
+fn ffi_panic_response() -> *mut c_char {
+    response_to_c_string(&bridge_error(
+        "unknown",
+        "panic",
+        "Rust bridge panicked; the operation was aborted and no result is available",
+    ))
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn goose_core_version_json() -> *mut c_char {
-    json_to_c_string(core_version_payload())
+    catch_unwind(AssertUnwindSafe(|| json_to_c_string(core_version_payload())))
+        .unwrap_or_else(|_| ffi_panic_response())
 }
 
 #[unsafe(no_mangle)]
@@ -2522,7 +2544,10 @@ pub unsafe extern "C" fn goose_bridge_handle_json(request_json: *const c_char) -
             ));
         }
     };
-    string_to_c_string(handle_bridge_request_json(request))
+    catch_unwind(AssertUnwindSafe(|| {
+        string_to_c_string(handle_bridge_request_json(request))
+    }))
+    .unwrap_or_else(|_| ffi_panic_response())
 }
 
 #[unsafe(no_mangle)]
@@ -2531,7 +2556,9 @@ pub unsafe extern "C" fn goose_bridge_free_string(value: *mut c_char) {
         return;
     }
     // Reconstructing the CString transfers ownership back to Rust so it can be dropped once.
-    drop(unsafe { CString::from_raw(value) });
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        drop(unsafe { CString::from_raw(value) });
+    }));
 }
 
 fn parse_frame_hex_bridge(args: ParseFrameArgs) -> GooseResult<serde_json::Value> {
